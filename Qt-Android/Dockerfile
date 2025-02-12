@@ -1,4 +1,4 @@
-# Base image: Ubuntu 20.04 (for compatibility with `libicui18n.so.56`)
+# Use Ubuntu 20.04 as base image
 FROM ubuntu:20.04
 
 # Set timezone and locale
@@ -7,14 +7,13 @@ ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Update GPG keys to fix `invalid signature` issue
-RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3B4FE6ACC0B21F32 871920D1991BC93C || true
+# Update GPG keys to fix invalid signature issues
+RUN sed -i 's|http://mirror.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list \
+    && sed -i 's|http://security.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list \
+    && apt-get update --allow-releaseinfo-change
 
-# Replace default Ubuntu repositories with reliable mirrors
-RUN sed -i 's|http://archive.ubuntu.com/ubuntu|http://mirror.ubuntu.com/ubuntu|g' /etc/apt/sources.list \
-    && sed -i 's|http://security.ubuntu.com/ubuntu|http://mirror.ubuntu.com/ubuntu|g' /etc/apt/sources.list
 
-# Install essential packages and dependencies
+# Install required dependencies
 RUN apt-get clean && apt-get update && apt install -y \
     tzdata \
     build-essential \
@@ -29,7 +28,7 @@ RUN apt-get clean && apt-get update && apt install -y \
     sudo \
     make \
     perl \
-    openjdk-11-jdk-headless \
+    openjdk-17-jdk-headless \
     libxkbcommon-x11-0 \
     libfontconfig1 \
     libegl1 \
@@ -38,14 +37,14 @@ RUN apt-get clean && apt-get update && apt install -y \
     && dpkg-reconfigure -f noninteractive tzdata \
     && apt-get clean
 
-# Install CMake
+# Install latest CMake
 ARG CMAKE_VERSION=3.27.7
 RUN curl -Lo install-cmake.sh https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.sh \
     && chmod +x install-cmake.sh \
     && ./install-cmake.sh --skip-license --prefix=/usr/local \
     && rm -fv install-cmake.sh
 
-# Install aqtinstall (Qt package manager)
+# Install latest aqtinstall
 RUN pip install --upgrade aqtinstall
 
 # Set Qt and Android versions
@@ -53,11 +52,11 @@ ARG QT_VERSION=6.5.2
 ARG ANDROID_SDK_VERSION=9123335
 ARG ANDROID_NDK_VERSION=25.1.8937393
 
-# Download and install Qt 6 for both desktop and Android
+# Install Qt 6.5.2 for both desktop and Android
 RUN aqt install-qt linux desktop ${QT_VERSION} gcc_64 --outputdir /opt/qt --archives qtbase qttools qtquickcontrols2 qtdeclarative
 RUN aqt install-qt linux android ${QT_VERSION} android_arm64_v8a --outputdir /opt/qt --archives qtbase qttools qtquickcontrols2 qtdeclarative
 
-# Set environment variables for Android and Qt
+# Set environment variables for Qt and Android SDK
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
 ENV ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}
 ENV QT_ANDROID_PATH=/opt/qt/${QT_VERSION}/android_arm64_v8a
