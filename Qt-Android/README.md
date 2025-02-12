@@ -1,9 +1,3 @@
-### ✅ **GitHub Repository Description (English & Persian)**
-
----
-
-## **📌 English Description**  
-
 ### **Qt Android Build Environment (Docker-based)**
 This repository provides a **fully automated and dynamic Docker environment** for **building Qt-based Android applications**.  
 It eliminates the hassle of manually configuring the Android SDK, NDK, Qt, and other dependencies.  
