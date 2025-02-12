@@ -1,7 +1,3 @@
-### **📌 GitHub Repository Description for Multi-Purpose Docker Repository**  
-
----
-
 ## **🚀 Docker Utilities Collection**  
 
 This repository contains **multiple Docker environments**, each designed for a specific purpose.  
