@@ -7,13 +7,8 @@ ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Update GPG keys and package lists
-RUN sed -i 's|http://mirror.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list \
-    && sed -i 's|http://security.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list \
-    && apt-get update --allow-releaseinfo-change
-
-# Install required dependencies
-RUN apt-get clean && apt-get update && apt install -y \
+# Update package lists and install required dependencies
+RUN apt-get update && apt install -y \
     tzdata \
     build-essential \
     g++ \
@@ -44,7 +39,7 @@ RUN curl -Lo install-cmake.sh https://github.com/Kitware/CMake/releases/download
     && ./install-cmake.sh --skip-license --prefix=/usr/local \
     && rm -fv install-cmake.sh
 
-# Install latest aqtinstall
+# Install aqtinstall for Qt installation
 RUN pip install --upgrade aqtinstall
 
 # Set Qt and Android versions
@@ -56,7 +51,7 @@ ARG ANDROID_NDK_VERSION=25.1.8937393
 RUN aqt install-qt linux desktop ${QT_VERSION} gcc_64 --outputdir /opt/qt --modules qtwebview qtquick3d qtquicktimeline qtremoteobjects qtserialport qtshadertools
 RUN aqt install-qt linux android ${QT_VERSION} android_arm64_v8a --outputdir /opt/qt --modules qtwebview qtquick3d qtquicktimeline qtremoteobjects qtserialport qtshadertools
 
-# Set environment variables for Qt and Android SDK
+# Set environment variables
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
 ENV ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}
 ENV QT_ANDROID_PATH=/opt/qt/${QT_VERSION}/android_arm64_v8a
@@ -77,44 +72,50 @@ RUN yes | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --sdk_root=${A
 # Install required Android SDK components
 RUN ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --sdk_root=${ANDROID_SDK_ROOT} "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;${ANDROID_NDK_VERSION}" "cmdline-tools;latest"
 
-# Set project name dynamically
+# Set project directory
 ARG PROJECT_NAME=qt-android
-ENV PROJECT_DIR=/workspace/${PROJECT_NAME}
+ENV PROJECT_DIR=/workspace/QtAndroidApp
 
-# Copy project files into the workspace dynamically
+# Copy project files into workspace
 COPY . ${PROJECT_DIR}
 
-# Set working directory dynamically
+# Set working directory
 WORKDIR ${PROJECT_DIR}
 
 # Create output directory
 RUN mkdir -p /workspace/output/libs/arm64-v8a/
 
-# Build Qt Android project and generate APK dynamically
+# Build Qt Android project and generate APK
 RUN if [ -f "${PROJECT_DIR}/${PROJECT_NAME}.pro" ]; then \
-        echo "=== Running QMake ===" \
-        && /opt/qt/${QT_VERSION}/android_arm64_v8a/bin/qmake ${PROJECT_DIR}/${PROJECT_NAME}.pro "INSTALL_ROOT=/workspace/output" \
-        && echo "=== Running Make ===" \
-        && make install \
-        && echo "=== Moving built files ===" \
-        && mkdir -p /workspace/output/libs/arm64-v8a \
-        && mv /workspace/output/install-root/* /workspace/output/libs/arm64-v8a/ \
-        && cp -r /workspace/output/libs/arm64-v8a/lib${PROJECT_NAME}_arm64-v8a.so /workspace/output/libs/arm64-v8a/; \
+        echo "=== Running QMake ===" && \
+        /opt/qt/${QT_VERSION}/android_arm64_v8a/bin/qmake ${PROJECT_DIR}/${PROJECT_NAME}.pro && \
+        echo "=== Running Make ===" && \
+        make && \
+        make install INSTALL_ROOT=/workspace/output && \
+        echo "=== Checking installed files ===" && \
+        find /workspace/output -type f && \
+        echo "=== Checking all files ===" && \
+        find /workspace -name "*.so" && \
+        echo "=== Moving built files ===" && \
+        mkdir -p /workspace/output/libs/arm64-v8a && \
+        if [ ! -f "/workspace/output/libs/arm64-v8a/libQtAndroidApp_arm64-v8a.so" ]; then \
+            cp -r /workspace/output/libs/arm64-v8a/libQtAndroidApp_arm64-v8a.so /workspace/output/libs/arm64-v8a/; \
+        fi \
     fi
 
-# Rename deployment settings file if needed
-RUN if [ -f "Qt-Android/android-${PROJECT_NAME}-deployment-settings.json" ]; then \
-        echo "=== Renaming deployment settings ===" \
-        && mv ${PROJECT_DIR}/android-${PROJECT_NAME}-deployment-settings.json ${PROJECT_DIR}/android-deployment-settings.json; \
+
+# Check if androiddeployqt6 exists, otherwise use androiddeployqt
+RUN if [ ! -f "/opt/qt/${QT_VERSION}/android_arm64_v8a/bin/androiddeployqt6" ]; then \
+        ln -s androiddeployqt /opt/qt/${QT_VERSION}/android_arm64_v8a/bin/androiddeployqt6; \
     fi
 
 # Run androiddeployqt to generate APK
-RUN if [ -f "${PROJECT_DIR}/android-deployment-settings.json" ]; then \
+RUN if [ -f "${PROJECT_DIR}/android-${PROJECT_NAME}-deployment-settings.json" ]; then \
         echo "=== Running androiddeployqt ===" \
-        && /opt/qt/${QT_VERSION}/android_arm64_v8a/bin/androiddeployqt --input ${PROJECT_DIR}/android-deployment-settings.json --output /workspace/output --android-platform android-34 --gradle; \
+        && androiddeployqt6 --input ${PROJECT_DIR}/android-${PROJECT_NAME}-deployment-settings.json --output /workspace/output --android-platform android-34 --gradle; \
     fi
 
-# Check if APK is created and copy to output directory
+# Ensure APK is copied to output directory
 RUN if [ -f "/workspace/output/build/outputs/apk/debug/app-debug.apk" ]; then \
         echo "=== Copying APK to output ===" \
         && cp /workspace/output/build/outputs/apk/debug/app-debug.apk /workspace/output/; \
